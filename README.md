@@ -1,5 +1,8 @@
 # nestjs-raft-leader-election
 
+![NPM Last Update](https://img.shields.io/npm/last-update/nestjs-raft-leader-election)
+![GitHub License](https://img.shields.io/github/license/matthias-hampel/nestjs-raft-leader-election)
+
 ## Description
 
 Leader election module for NestJS.
