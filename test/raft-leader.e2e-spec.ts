@@ -20,10 +20,7 @@ async function assertRedisReachable(url: string): Promise<void> {
   }
 }
 
-async function waitFor(
-  predicate: () => boolean,
-  options: { timeoutMs: number; intervalMs?: number },
-): Promise<void> {
+async function waitFor(predicate: () => boolean, options: { timeoutMs: number; intervalMs?: number }): Promise<void> {
   const intervalMs = options.intervalMs ?? 150;
   const deadline = Date.now() + options.timeoutMs;
   while (Date.now() < deadline) {

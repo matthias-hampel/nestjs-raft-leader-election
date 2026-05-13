@@ -38,6 +38,41 @@ import { RaftModule } from "nestjs-raft-leader-election";
 export class AppModule {}
 ```
 
+### Async registration with `ConfigModule`
+
+Use `forRootAsync` when Redis URL (or password) comes from `@nestjs/config` instead of literals. Install config package alongside this library:
+
+```bash
+pnpm add @nestjs/config
+```
+
+Load `ConfigModule` first so `ConfigService` is available to the raft factory (`imports` + `inject` pattern below matches Nest configurable modules):
+
+```typescript
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { RaftModule } from "nestjs-raft-leader-election";
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    RaftModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        redis: {
+          url: config.getOrThrow<string>("REDIS_URL"),
+          password: config.get<string>("REDIS_PASSWORD"),
+        },
+      }),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+If `RaftModule.forRootAsync` is the first consumer of `ConfigService`, you can omit `imports: [ConfigModule]` when configuration is globally registered (`isGlobal: true`).
+
 ### Use leader checks
 
 Inject `HeartbeatService` where you need to run code only on the elected leader (cron, background jobs, single-writer paths).

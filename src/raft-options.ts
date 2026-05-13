@@ -1,5 +1,3 @@
-import { ConfigurableModuleBuilder } from "@nestjs/common";
-
 export interface RaftModuleOptions {
   redis: {
     url: string;
@@ -7,9 +5,5 @@ export interface RaftModuleOptions {
   };
 }
 
-export const {
-  ConfigurableModuleClass,
-  MODULE_OPTIONS_TOKEN: RAFT_MODULE_OPTIONS,
-  OPTIONS_TYPE,
-  ASYNC_OPTIONS_TYPE,
-} = new ConfigurableModuleBuilder<RaftModuleOptions>().setClassMethodName("forRoot").build();
+/** Injection token for `RaftModuleOptions` when using `RedisService` or custom providers. */
+export const RAFT_MODULE_OPTIONS = Symbol("RAFT_MODULE_OPTIONS");

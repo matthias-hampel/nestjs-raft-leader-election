@@ -1,16 +1,21 @@
-import { DynamicModule } from "@nestjs/common";
+import { ConfigurableModuleBuilder, type DynamicModule } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { HeartbeatService } from "./heartbeat/heartbeat.service";
-import { ConfigurableModuleClass, type RaftModuleOptions } from "./raft-options";
+import { RAFT_MODULE_OPTIONS, type RaftModuleOptions } from "./raft-options";
 import { RedisService } from "./redis/redis.service";
 
-export class RaftModule extends ConfigurableModuleClass {
-  public static forRoot(config: RaftModuleOptions): DynamicModule {
-    return {
-      module: RaftModule,
-      imports: [ScheduleModule.forRoot()],
+const { ConfigurableModuleClass, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } = new ConfigurableModuleBuilder<RaftModuleOptions>({
+  optionsInjectionToken: RAFT_MODULE_OPTIONS,
+})
+  .setClassMethodName("forRoot")
+  .setExtras(
+    {},
+    (definition): DynamicModule => ({
+      ...definition,
+      imports: [...(definition.imports ?? []), ScheduleModule.forRoot()],
       providers: [
-        { provide: RedisService, useValue: new RedisService(config) },
+        ...(definition.providers ?? []),
+        RedisService,
         {
           provide: HeartbeatService,
           useFactory: (redis: RedisService): HeartbeatService => {
@@ -20,8 +25,12 @@ export class RaftModule extends ConfigurableModuleClass {
         },
       ],
       exports: [HeartbeatService],
-    };
-  }
-}
+    }),
+  )
+  .build();
+
+export class RaftModule extends ConfigurableModuleClass {}
 
 export default RaftModule;
+
+export { ASYNC_OPTIONS_TYPE, OPTIONS_TYPE };
