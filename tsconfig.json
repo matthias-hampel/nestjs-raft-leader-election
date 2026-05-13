@@ -1,8 +1,9 @@
 {
+  "include": ["src/**/*"],
   "compilerOptions": {
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "rootDir": ".",
+    "rootDir": "src",
     "resolvePackageJsonExports": true,
     "esModuleInterop": true,
     "isolatedModules": true,
