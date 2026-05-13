@@ -6,16 +6,24 @@ Leader election module for NestJS.
 
 ## Usage
 
-### Install
+### Peer dependencies
 
-Add this library and ensure NestJS scheduling is available (`RaftModule` registers `@Interval` handlers).
+This package does **not** bundle Nest packages. Align versions with Nest **11.x** (`^11.0.0`; minimum satisfies `11.0.0`). Your app must provide a single resolved copy of `@nestjs/common` / `@nestjs/core` (same major as peers). Installing them twice—for example nested under `node_modules/nestjs-raft-leader-election` and at the app root—breaks the global DI container (e.g. `Reflector` missing for `@nestjs/schedule` / `SchedulerMetadataAccessor`).
+
+`RaftModule` calls `ScheduleModule.forRoot()` and `HeartbeatService` uses `@Interval`, so **`@nestjs/schedule` is required** (install it in the app alongside Nest core).
+
+Express-based apps normally already have `@nestjs/platform-express`; pin it so it matches `@nestjs/common` / `@nestjs/core`.
 
 ```bash
-pnpm add nestjs-raft-leader-election @nestjs/schedule
-# or: npm install / yarn add
+pnpm add nestjs-raft-leader-election @nestjs/common @nestjs/core @nestjs/platform-express @nestjs/schedule
+# npm install nestjs-raft-leader-election @nestjs/common @nestjs/core @nestjs/platform-express @nestjs/schedule
 ```
 
-Your app already needs compatible `@nestjs/common` and `@nestjs/core` versions (see this repo’s `package.json`). Redis must be reachable from every replica that participates in election.
+After install, `pnpm why @nestjs/core` (or npm equivalent) should show **one** physical `@nestjs/core` for the workspace, not a second tree only inside this library.
+
+### Install
+
+Redis must be reachable from every replica that participates in election.
 
 ### Register the module
 
