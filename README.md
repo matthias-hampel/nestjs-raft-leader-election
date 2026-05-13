@@ -5,7 +5,7 @@
 
 ## Description
 
-Leader election module for NestJS.
+Leader election module for NestJS using the [Raft algorithm](https://en.wikipedia.org/wiki/Raft_(algorithm)).
 
 ## Usage
 
