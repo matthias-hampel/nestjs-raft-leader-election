@@ -1,0 +1,24 @@
+# Sources & tests (published entry is dist/)
+src/
+test/
+
+# Tooling
+tsconfig*.json
+nest-cli.json
+biome.json
+renovate.json
+pnpm-lock.yaml
+
+# Coverage & local build metadata
+coverage/
+.nyc_output/
+*.tsbuildinfo
+
+# Env & IDE
+.env*
+.vscode/
+.idea/
+*.log
+
+# CI (optional noise in tarball)
+.github/
