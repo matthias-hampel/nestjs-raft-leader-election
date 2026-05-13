@@ -1,6 +1,6 @@
 {
   "name": "nestjs-raft-leader-election",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Leader election module for NestJS",
   "author": "matthiashampel13@gmail.com",
   "license": "MIT",
@@ -14,6 +14,7 @@
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",
+  "files": ["dist"],
   "scripts": {
     "build": "nest build",
     "format": "biome format --write",
