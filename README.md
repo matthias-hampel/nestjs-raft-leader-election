@@ -150,4 +150,4 @@ $ pnpm run test:cov
 
 ## License
 
-This project is [MIT licensed](https://github.com/matthias-hampel/nestjs-raft/blob/master/LICENSE).
+This project is [MIT licensed](https://github.com/matthias-hampel/nestjs-raft-leader-election/blob/main/LICENSE).
