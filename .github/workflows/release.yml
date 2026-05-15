@@ -72,7 +72,7 @@ jobs:
         run: pnpm run build
 
       - name: Save release notes from HEAD commit
-        run: git log -1 --pretty=%B > release-notes.md
+        run: git log -1 --pretty=%B > /tmp/release-notes.md
 
       - name: Bump package version
         run: pnpm version ${{ inputs.version_bump }} --no-git-tag-version
@@ -109,7 +109,7 @@ jobs:
           gh release create "v${{ steps.ver.outputs.version }}"
           --repo "${{ github.repository }}"
           --title "v${{ steps.ver.outputs.version }}"
-          --notes-file release-notes.md
+          --notes-file /tmp/release-notes.md
 
       - name: Publish to npm (OIDC trusted publishing)
         run: |
