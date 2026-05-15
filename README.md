@@ -86,6 +86,8 @@ If `RaftModule.forRootAsync` is the first consumer of `ConfigService`, you can o
 
 ### Use leader checks
 
+`RaftModule` is registered as a **global** module, so after a single `forRoot` / `forRootAsync` import (for example on `AppModule`), `HeartbeatService` is injectable in any module without importing `RaftModule` again.
+
 Inject `HeartbeatService` where you need to run code only on the elected leader (cron, background jobs, single-writer paths).
 
 ```typescript

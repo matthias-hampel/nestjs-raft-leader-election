@@ -12,6 +12,7 @@ const { ConfigurableModuleClass, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } = new Config
     {},
     (definition): DynamicModule => ({
       ...definition,
+      global: true,
       imports: [...(definition.imports ?? []), ScheduleModule.forRoot()],
       providers: [
         ...(definition.providers ?? []),
