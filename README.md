@@ -43,6 +43,8 @@ import { RaftModule } from "nestjs-raft-leader-election";
         url: process.env.REDIS_URL ?? "redis://localhost:6379",
         password: process.env.REDIS_PASSWORD, // optional
       },
+      // Required: isolate pub/sub per logical app (`my-service:heartbeat`, …).
+      namespace: process.env.RAFT_REDIS_NAMESPACE ?? "my-service",
     }),
   ],
 })
@@ -75,6 +77,7 @@ import { RaftModule } from "nestjs-raft-leader-election";
           url: config.getOrThrow<string>("REDIS_URL"),
           password: config.get<string>("REDIS_PASSWORD"),
         },
+        namespace: config.getOrThrow<string>("RAFT_REDIS_NAMESPACE"),
       }),
     }),
   ],
@@ -109,7 +112,7 @@ export class JobsService {
 
 `HeartbeatService` starts Redis subscriptions on application bootstrap and publishes heartbeats on a fixed interval; `isLeader()` compares this instance’s node id with the current leader announced over Redis.
 
-**Operational note:** All participating Nest processes must use the **same Redis** so pub/sub channels (`heartbeat`, `election`, `vote`, `leader`) are shared.
+**Operational note:** All replicas that participate in **one** leader election must use the **same Redis** and the **same `namespace`**. Channels are `${namespace}:heartbeat`, `${namespace}:election`, `${namespace}:vote`, and `${namespace}:leader`. `namespace` must be non-empty (whitespace trimmed); use distinct values when several apps share one Redis server.
 
 ## Project setup
 

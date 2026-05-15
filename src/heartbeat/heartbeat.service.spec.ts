@@ -4,8 +4,11 @@
  * Fake timers used where heartbeat staleness depends on wall-clock age.
  */
 import { Test, TestingModule } from "@nestjs/testing";
+import { buildRaftChannels, HEARTBEAT_RAFT_CHANNELS } from "../raft-options";
 import { RedisService } from "../redis/redis.service";
 import { HEARTBEAT_INTERVAL, HeartbeatService } from "./heartbeat.service";
+
+const UNIT_CHANNELS = buildRaftChannels("unit-test");
 
 type Handlers = Record<string, (message: string) => void | Promise<void>>;
 
@@ -44,7 +47,7 @@ describe("HeartbeatService", () => {
     jest.setSystemTime(new Date("2020-01-01T00:00:00.000Z"));
     mockRedis = createMockRedis();
     const module: TestingModule = await Test.createTestingModule({
-      providers: [HeartbeatService, { provide: RedisService, useValue: mockRedis }],
+      providers: [{ provide: HEARTBEAT_RAFT_CHANNELS, useValue: UNIT_CHANNELS }, HeartbeatService, { provide: RedisService, useValue: mockRedis }],
     }).compile();
     service = module.get(HeartbeatService);
   });
@@ -58,12 +61,20 @@ describe("HeartbeatService", () => {
   }
 
   // Bootstrap registers handlers on all four channels Redis pub/sub uses for Raft signals.
-  it("onApplicationBootstrap subscribes heartbeat, election, vote, and leader", async () => {
+  it("onApplicationBootstrap subscribes heartbeat, election, vote, and leader under namespace", async () => {
     await bootstrap();
-    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith("heartbeat", expect.any(Function));
-    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith("election", expect.any(Function));
-    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith("vote", expect.any(Function));
-    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith("leader", expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(UNIT_CHANNELS.heartbeat, expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(UNIT_CHANNELS.election, expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(UNIT_CHANNELS.vote, expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(UNIT_CHANNELS.leader, expect.any(Function));
+  });
+
+  it("throws if HEARTBEAT_RAFT_CHANNELS is not wired when resolving HeartbeatService from Nest", async () => {
+    await expect(
+      Test.createTestingModule({
+        providers: [HeartbeatService, { provide: RedisService, useValue: createMockRedis() }],
+      }).compile(),
+    ).rejects.toThrow(/HeartbeatService requires pub\/sub channel names/);
   });
 
   // Smoke: Nest provider resolves; service exists after wiring Redis mock.
@@ -75,7 +86,7 @@ describe("HeartbeatService", () => {
   // Incoming `heartbeat` messages populate activeNodes so quorum and leader liveness use fresh peer set.
   it("heartbeat handler adds peer id to activeNodes", async () => {
     await bootstrap();
-    mockRedis.handlers.heartbeat("peer-x");
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat]("peer-x");
     expect(Object.keys(internals(service).activeNodes)).toContain("peer-x");
   });
 
@@ -89,14 +100,14 @@ describe("HeartbeatService", () => {
   it("isLeader is true when leader message equals this node id", async () => {
     await bootstrap();
     const { nodeId } = internals(service);
-    await mockRedis.handlers.leader(nodeId);
+    await mockRedis.handlers[UNIT_CHANNELS.leader](nodeId);
     expect(service.isLeader()).toBe(true);
   });
 
   // Foreign leader id must not grant leadership on this instance.
   it("isLeader is false when leader message is another node", async () => {
     await bootstrap();
-    await mockRedis.handlers.leader("other-node");
+    await mockRedis.handlers[UNIT_CHANNELS.leader]("other-node");
     expect(service.isLeader()).toBe(false);
   });
 
@@ -105,9 +116,9 @@ describe("HeartbeatService", () => {
     await bootstrap();
     const { nodeId } = internals(service);
     mockRedis.client.publish.mockClear();
-    await mockRedis.handlers.election("candidate-1");
-    expect(mockRedis.client.publish).toHaveBeenCalledWith("heartbeat", nodeId);
-    expect(mockRedis.client.publish).toHaveBeenCalledWith("vote", "candidate-1");
+    await mockRedis.handlers[UNIT_CHANNELS.election]("candidate-1");
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(UNIT_CHANNELS.heartbeat, nodeId);
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(UNIT_CHANNELS.vote, "candidate-1");
     expect(internals(service).election).toBe(true);
   });
 
@@ -117,7 +128,7 @@ describe("HeartbeatService", () => {
     const { nodeId } = internals(service);
     mockRedis.client.publish.mockClear();
     await service.checkLeader();
-    expect(mockRedis.client.publish).toHaveBeenCalledWith("election", nodeId);
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(UNIT_CHANNELS.election, nodeId);
     expect(internals(service).election).toBe(true);
   });
 
@@ -127,7 +138,7 @@ describe("HeartbeatService", () => {
     await service.checkLeader();
     mockRedis.client.publish.mockClear();
     await service.checkLeader();
-    expect(mockRedis.client.publish).not.toHaveBeenCalledWith("election", expect.any(String));
+    expect(mockRedis.client.publish).not.toHaveBeenCalledWith(UNIT_CHANNELS.election, expect.any(String));
   });
 
   // If leader id is known and still present in active heartbeats, skip new election.
@@ -135,36 +146,36 @@ describe("HeartbeatService", () => {
     await bootstrap();
     const { nodeId } = internals(service);
     const leaderId = "stable-leader";
-    await mockRedis.handlers.leader(leaderId);
-    mockRedis.handlers.heartbeat(leaderId);
+    await mockRedis.handlers[UNIT_CHANNELS.leader](leaderId);
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat](leaderId);
     mockRedis.client.publish.mockClear();
     await service.checkLeader();
-    expect(mockRedis.client.publish).not.toHaveBeenCalledWith("election", nodeId);
+    expect(mockRedis.client.publish).not.toHaveBeenCalledWith(UNIT_CHANNELS.election, nodeId);
   });
 
   // Stored leader not in activeNodes (no recent heartbeat) ⇒ same as no leader ⇒ triggers new election publish.
   it("checkLeader starts election when leader id has no active heartbeat entry", async () => {
     await bootstrap();
-    await mockRedis.handlers.leader("ghost-leader");
+    await mockRedis.handlers[UNIT_CHANNELS.leader]("ghost-leader");
     mockRedis.client.publish.mockClear();
     await service.checkLeader();
-    expect(mockRedis.client.publish).toHaveBeenCalledWith("election", expect.any(String));
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(UNIT_CHANNELS.election, expect.any(String));
   });
 
   // `vote` handler: only votes for self count; majority of activeNodes triggers `leader` publish; winning clears election bit.
   it("vote handler increments quorum and publishes leader when majority reached", async () => {
     await bootstrap();
     const { nodeId } = internals(service);
-    mockRedis.handlers.heartbeat(nodeId);
-    mockRedis.handlers.heartbeat("peer-a");
-    mockRedis.handlers.heartbeat("peer-b");
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat](nodeId);
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat]("peer-a");
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat]("peer-b");
     mockRedis.client.publish.mockClear();
-    await mockRedis.handlers.vote(nodeId);
-    expect(mockRedis.client.publish).not.toHaveBeenCalledWith("leader", nodeId);
-    await mockRedis.handlers.vote(nodeId);
-    expect(mockRedis.client.publish).toHaveBeenCalledWith("leader", nodeId);
+    await mockRedis.handlers[UNIT_CHANNELS.vote](nodeId);
+    expect(mockRedis.client.publish).not.toHaveBeenCalledWith(UNIT_CHANNELS.leader, nodeId);
+    await mockRedis.handlers[UNIT_CHANNELS.vote](nodeId);
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(UNIT_CHANNELS.leader, nodeId);
     expect(internals(service).election).toBe(false);
-    await mockRedis.handlers.leader(nodeId);
+    await mockRedis.handlers[UNIT_CHANNELS.leader](nodeId);
     expect(internals(service).votesForThisNode).toBe(0);
   });
 
@@ -172,16 +183,16 @@ describe("HeartbeatService", () => {
   it("vote handler ignores votes for other candidates", async () => {
     await bootstrap();
     const { nodeId } = internals(service);
-    mockRedis.handlers.heartbeat(nodeId);
-    mockRedis.handlers.heartbeat("peer-a");
-    await mockRedis.handlers.vote("someone-else");
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat](nodeId);
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat]("peer-a");
+    await mockRedis.handlers[UNIT_CHANNELS.vote]("someone-else");
     expect(internals(service).votesForThisNode).toBe(0);
   });
 
   // Empty vote payload fails `message &&` guard so tally stays zero and no leader publish from this path.
   it("vote handler ignores empty message", async () => {
     await bootstrap();
-    await mockRedis.handlers.vote("");
+    await mockRedis.handlers[UNIT_CHANNELS.vote]("");
     expect(internals(service).votesForThisNode).toBe(0);
   });
 
@@ -189,10 +200,10 @@ describe("HeartbeatService", () => {
   it("leader subscription resets election state and vote count", async () => {
     await bootstrap();
     const { nodeId } = internals(service);
-    mockRedis.handlers.heartbeat(nodeId);
-    mockRedis.handlers.heartbeat("peer-a");
-    await mockRedis.handlers.vote(nodeId);
-    await mockRedis.handlers.leader("remote-leader");
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat](nodeId);
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat]("peer-a");
+    await mockRedis.handlers[UNIT_CHANNELS.vote](nodeId);
+    await mockRedis.handlers[UNIT_CHANNELS.leader]("remote-leader");
     expect(internals(service).election).toBe(false);
     expect(internals(service).votesForThisNode).toBe(0);
     expect(internals(service).leaderId).toBe("remote-leader");
@@ -201,9 +212,35 @@ describe("HeartbeatService", () => {
   // Peers older than 2× heartbeat interval drop from activeNodes (runs inside checkLeader path).
   it("clearInactiveNodes removes stale heartbeats after interval threshold", async () => {
     await bootstrap();
-    mockRedis.handlers.heartbeat("stale-peer");
+    mockRedis.handlers[UNIT_CHANNELS.heartbeat]("stale-peer");
     jest.advanceTimersByTime(HEARTBEAT_INTERVAL * 2 + 1);
     await service.checkLeader();
     expect(Object.keys(internals(service).activeNodes)).not.toContain("stale-peer");
+  });
+
+  it("explicit ctor channel map supports alternate namespace beside DI-provided UNIT_CHANNELS stub", async () => {
+    const channels = buildRaftChannels("billing");
+    mockRedis = createMockRedis();
+    const moduleRef: TestingModule = await Test.createTestingModule({
+      providers: [
+        { provide: HEARTBEAT_RAFT_CHANNELS, useValue: UNIT_CHANNELS },
+        {
+          provide: HeartbeatService,
+          useValue: new HeartbeatService(mockRedis as unknown as RedisService, channels),
+        },
+        { provide: RedisService, useValue: mockRedis },
+      ],
+    }).compile();
+    const svc = moduleRef.get(HeartbeatService);
+    await svc.onApplicationBootstrap();
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(channels.heartbeat, expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(channels.election, expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(channels.vote, expect.any(Function));
+    expect(mockRedis.subscriber.subscribe).toHaveBeenCalledWith(channels.leader, expect.any(Function));
+
+    mockRedis.client.publish.mockClear();
+    await mockRedis.handlers[channels.election]("candidate-z");
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(channels.heartbeat, internals(svc).nodeId);
+    expect(mockRedis.client.publish).toHaveBeenCalledWith(channels.vote, "candidate-z");
   });
 });

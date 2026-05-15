@@ -1,7 +1,7 @@
 import { ConfigurableModuleBuilder, type DynamicModule } from "@nestjs/common";
 import { ScheduleModule } from "@nestjs/schedule";
 import { HeartbeatService } from "./heartbeat/heartbeat.service";
-import { RAFT_MODULE_OPTIONS, type RaftModuleOptions } from "./raft-options";
+import { buildRaftChannels, RAFT_MODULE_OPTIONS, type RaftModuleOptions } from "./raft-options";
 import { RedisService } from "./redis/redis.service";
 
 const { ConfigurableModuleClass, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } = new ConfigurableModuleBuilder<RaftModuleOptions>({
@@ -19,10 +19,10 @@ const { ConfigurableModuleClass, OPTIONS_TYPE, ASYNC_OPTIONS_TYPE } = new Config
         RedisService,
         {
           provide: HeartbeatService,
-          useFactory: (redis: RedisService): HeartbeatService => {
-            return new HeartbeatService(redis);
+          useFactory: (redis: RedisService, options: RaftModuleOptions): HeartbeatService => {
+            return new HeartbeatService(redis, buildRaftChannels(options.namespace));
           },
-          inject: [RedisService],
+          inject: [RedisService, RAFT_MODULE_OPTIONS],
         },
       ],
       exports: [HeartbeatService],

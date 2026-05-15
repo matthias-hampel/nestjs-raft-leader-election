@@ -19,6 +19,7 @@ describe("RedisService", () => {
       url: "redis://localhost:6379",
       password: "test-password",
     },
+    namespace: "redis-service-spec",
   };
 
   beforeEach(() => {

@@ -1,7 +1,8 @@
-import { Injectable, Logger, OnApplicationBootstrap } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional, OnApplicationBootstrap } from "@nestjs/common";
 import { Interval } from "@nestjs/schedule";
 import { randomInt, randomUUID } from "crypto";
 import { differenceInMilliseconds } from "date-fns";
+import { HEARTBEAT_RAFT_CHANNELS, type RaftChannels } from "../raft-options";
 import { RedisService as Redis } from "../redis/redis.service";
 
 export const HEARTBEAT_INTERVAL = 300;
@@ -17,30 +18,42 @@ export class HeartbeatService implements OnApplicationBootstrap {
   private activeNodes: { [key: string]: Date } = {};
   private votesForThisNode = 0;
 
-  constructor(private readonly redis: Redis) {}
+  private readonly channels: RaftChannels;
+
+  constructor(
+    private readonly redis: Redis,
+    @Optional()
+    @Inject(HEARTBEAT_RAFT_CHANNELS)
+    channels?: RaftChannels | null,
+  ) {
+    if (channels == null) {
+      throw new Error("HeartbeatService requires pub/sub channel names; register RaftModule with `namespace`, or bind HEARTBEAT_RAFT_CHANNELS in tests.");
+    }
+    this.channels = channels;
+  }
 
   public async onApplicationBootstrap(): Promise<void> {
-    await this.redis.subscriber.subscribe("heartbeat", (message) => {
+    await this.redis.subscriber.subscribe(this.channels.heartbeat, (message) => {
       this.activeNodes[message] = new Date();
     });
 
-    await this.redis.subscriber.subscribe("election", async (message) => {
+    await this.redis.subscriber.subscribe(this.channels.election, async (message) => {
       this.election = true;
       await this.voteForNode(message);
     });
 
-    await this.redis.subscriber.subscribe("vote", async (message) => {
+    await this.redis.subscriber.subscribe(this.channels.vote, async (message) => {
       if (message && message === this.nodeId) {
         this.votesForThisNode++;
 
         if (this.votesForThisNode >= Math.floor(Object.keys(this.activeNodes).length / 2) + 1) {
           this.election = false;
-          await this.redis.client.publish("leader", this.nodeId);
+          await this.redis.client.publish(this.channels.leader, this.nodeId);
         }
       }
     });
 
-    await this.redis.subscriber.subscribe("leader", (message) => {
+    await this.redis.subscriber.subscribe(this.channels.leader, (message) => {
       this.logger.debug(`${message} is now the leader`);
 
       this.leaderId = message;
@@ -58,13 +71,13 @@ export class HeartbeatService implements OnApplicationBootstrap {
     this.clearInactiveNodes();
 
     if (this.election) {
-      await this.redis.client.publish("vote", nodeId);
+      await this.redis.client.publish(this.channels.vote, nodeId);
     }
   }
 
   @Interval(HEARTBEAT_INTERVAL)
   private async sendHeartbeat(): Promise<void> {
-    await this.redis.client.publish("heartbeat", this.nodeId);
+    await this.redis.client.publish(this.channels.heartbeat, this.nodeId);
   }
 
   @Interval(randomInt(HEARTBEAT_INTERVAL * 2, HEARTBEAT_INTERVAL * 4))
@@ -76,7 +89,7 @@ export class HeartbeatService implements OnApplicationBootstrap {
     if (!hasLeader && !this.election) {
       this.election = true;
 
-      await this.redis.client.publish("election", this.nodeId);
+      await this.redis.client.publish(this.channels.election, this.nodeId);
     }
   }
 

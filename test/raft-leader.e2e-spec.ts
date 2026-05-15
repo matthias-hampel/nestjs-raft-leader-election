@@ -32,11 +32,14 @@ async function waitFor(predicate: () => boolean, options: { timeoutMs: number; i
   throw new Error(`Condition not met within ${options.timeoutMs}ms`);
 }
 
-async function createRaftApp(url: string): Promise<INestApplication> {
+const E2E_SINGLE_CLUSTER_NS = "e2e-shared-leader-set";
+
+async function createRaftApp(url: string, namespace: string): Promise<INestApplication> {
   const moduleRef = await Test.createTestingModule({
     imports: [
       RaftModule.forRoot({
         redis: { url },
+        namespace,
       }),
     ],
   }).compile();
@@ -52,7 +55,7 @@ describe("Raft leader election (e2e)", () => {
   });
 
   it("single app instance becomes leader", async () => {
-    const app = await createRaftApp(redisUrl);
+    const app = await createRaftApp(redisUrl, E2E_SINGLE_CLUSTER_NS);
     try {
       const heartbeat = app.get(HeartbeatService);
       await waitFor(() => heartbeat.isLeader(), { timeoutMs: 20_000 });
@@ -62,8 +65,8 @@ describe("Raft leader election (e2e)", () => {
   });
 
   it("two app instances elect exactly one leader", async () => {
-    const app1 = await createRaftApp(redisUrl);
-    const app2 = await createRaftApp(redisUrl);
+    const app1 = await createRaftApp(redisUrl, E2E_SINGLE_CLUSTER_NS);
+    const app2 = await createRaftApp(redisUrl, E2E_SINGLE_CLUSTER_NS);
     try {
       const h1 = app1.get(HeartbeatService);
       const h2 = app2.get(HeartbeatService);
@@ -73,6 +76,19 @@ describe("Raft leader election (e2e)", () => {
     } finally {
       await app2.close();
       await app1.close();
+    }
+  });
+
+  it("different namespaces yield independent leaders on shared Redis", async () => {
+    const appNsA = await createRaftApp(redisUrl, "e2e-app-a");
+    const appNsB = await createRaftApp(redisUrl, "e2e-app-b");
+    try {
+      const a = appNsA.get(HeartbeatService);
+      const b = appNsB.get(HeartbeatService);
+      await waitFor(() => a.isLeader() && b.isLeader(), { timeoutMs: 30_000 });
+    } finally {
+      await appNsB.close();
+      await appNsA.close();
     }
   });
 });
