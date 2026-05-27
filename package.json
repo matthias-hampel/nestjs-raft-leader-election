@@ -1,6 +1,6 @@
 {
   "name": "nestjs-raft-leader-election",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Leader election module for NestJS",
   "author": "matthiashampel13@gmail.com",
   "license": "MIT",
