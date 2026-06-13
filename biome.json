@@ -1,7 +1,13 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": { "ignoreUnknown": false },
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "ignoreUnknown": false
+  },
   "formatter": {
     "enabled": true,
     "formatWithErrors": false,
@@ -18,7 +24,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": false,
+      "preset": "none",
       "complexity": {
         "noAdjacentSpacesInRegex": "error",
         "noExtraBooleanCast": "error",
@@ -131,7 +137,9 @@
       "includes": ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"],
       "linter": {
         "rules": {
-          "complexity": { "noArguments": "error" },
+          "complexity": {
+            "noArguments": "error"
+          },
           "correctness": {
             "noConstAssign": "off",
             "noGlobalObjectCalls": "off",
@@ -142,7 +150,9 @@
             "noUnreachable": "off",
             "noUnreachableSuper": "off"
           },
-          "style": { "useConst": "error" },
+          "style": {
+            "useConst": "error"
+          },
           "suspicious": {
             "noClassAssign": "off",
             "noDuplicateClassMembers": "off",
@@ -162,6 +172,10 @@
   ],
   "assist": {
     "enabled": true,
-    "actions": { "source": { "organizeImports": "on" } }
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   }
 }
