@@ -60,7 +60,7 @@
     "@nestjs/testing": "11.1.26",
     "@types/express": "5.0.6",
     "@types/jest": "30.0.0",
-    "@types/node": "25.9.3",
+    "@types/node": "25.9.5",
     "@types/supertest": "7.2.0",
     "globals": "17.6.0",
     "jest": "30.4.2",
